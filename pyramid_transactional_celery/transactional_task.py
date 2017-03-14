@@ -95,6 +95,9 @@ class TransactionalTask(Task):
         return super(TransactionalTask, self).apply_async(*args, **kwargs)
 
     def apply_async(self, *args, **kwargs):
-        _get_manager().append((self, args, kwargs))
+        if self.app.conf.get('CELERY_ALWAYS_EAGER', False):
+            return super(TransactionalTask, self).apply_async(*args, **kwargs)
+        else:
+            _get_manager().append((self, args, kwargs))
 
 task_tm = partial(base_task, base=TransactionalTask)
