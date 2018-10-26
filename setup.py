@@ -21,7 +21,7 @@ test_requirements = [
 
 setup(
     name='pyramid_transactional_celery',
-    version='0.1.3',
+    version='0.1.4',
     description='A transaction-aware Celery job setup',
     long_description=readme + '\n\n' + history,
     author='Christopher Petrilli',
