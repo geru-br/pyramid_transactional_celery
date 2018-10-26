@@ -95,8 +95,9 @@ class TransactionalTask(Task):
 
     def apply_async(self, *args, **kwargs):
         bypass_transaction_manager = kwargs.pop('bypass_transaction_manager', None)
+        celery_always_eager = self.app.conf.get('CELERY_ALWAYS_EAGER', False)
 
-        if bypass_transaction_manager:
+        if bypass_transaction_manager or celery_always_eager:
             return super(TransactionalTask, self).apply_async(*args, **kwargs)
         else:
             _get_manager().append((self, args, kwargs))
