@@ -75,7 +75,7 @@ class CeleryDataManager(object):
     def tpc_finish(self, transaction):
         while self.queued_tasks:
             task_instance, args, kwargs = self.queued_tasks.pop(0)
-            task_instance.apply_async(*args, call_from_tpc_finish=True, **kwargs)
+            task_instance.apply_async(*args, bypass_transaction_manager=True, **kwargs)
 
         self.in_commit = False
         self._cleanup()
@@ -90,13 +90,15 @@ class CeleryDataManager(object):
 class TransactionalTask(Task):
     """A task whose execution is delayed until the current transaction gets committed."""
 
-    def apply_async(self, *args, **kwargs):
-        retries_count = kwargs.get('retries', 0)
-        call_from_tpc_finish = kwargs.get('call_from_tpc_finish', None)
+    def retry(self, *args, **kwargs):
+        return super(TransactionalTask, self).retry(*args, bypass_transaction_manager=True, **kwargs)
 
-        if retries_count == 0 and not(call_from_tpc_finish):
-            _get_manager().append((self, args, kwargs))
-        else:
+    def apply_async(self, *args, **kwargs):
+        bypass_transaction_manager = kwargs.pop('bypass_transaction_manager', None)
+
+        if bypass_transaction_manager:
             return super(TransactionalTask, self).apply_async(*args, **kwargs)
+        else:
+            _get_manager().append((self, args, kwargs))
 
 task_tm = partial(base_task, base=TransactionalTask)
