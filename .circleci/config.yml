@@ -1,0 +1,25 @@
+version: 2
+jobs:
+
+  deploy:
+    docker:
+      - image: circleci/python:3.6
+    steps:
+      - checkout
+      - run:
+          name: build and upload to geru-pypi
+          command: |
+            python setup.py sdist
+            virtualenv venv
+            ./venv/bin/pip install twine
+            ./venv/bin/twine upload --repository-url https://geru-pypi.geru.com.br/ dist/*
+
+workflows:
+  version: 2
+  deploy:
+    jobs:
+      - deploy:
+          filters:
+            branches:
+              only:
+                - master
