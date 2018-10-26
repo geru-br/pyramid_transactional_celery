@@ -25,7 +25,7 @@ class TestPyramidTransactionalCelery(unittest.TestCase):
         self.celery_app = Celery()
         self.celery_app.conf.CELERY_ALWAYS_EAGER = True
 
-        from pyramid_transactional_celery import (TransactionalTask, task_tm)
+        from pyramid_transactional_celery import TransactionalTask, task_tm
 
         class TestTask(TransactionalTask):
             """A simple task that appends a sentinel object to a global."""

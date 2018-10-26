@@ -15,8 +15,10 @@ __all__ = [
 
 
 # New Celery structure complicates all of this in the name of flexibility
-Task = app_or_default().create_task_cls()
-base_task = app_or_default().task
+celery_app = app_or_default()
+Task = celery_app.create_task_cls()
+base_task = celery_app.task
+
 
 # Thread-local data
 _thread_data = threading.local()
@@ -72,8 +74,9 @@ class CeleryDataManager(object):
 
     def tpc_finish(self, transaction):
         while self.queued_tasks:
-            cls, args, kwargs = self.queued_tasks.pop(0)
-            cls.original_apply_async(*args, **kwargs)
+            task_instance, args, kwargs = self.queued_tasks.pop(0)
+            task_instance.apply_async(*args, bypass_transaction_manager=True, **kwargs)
+
         self.in_commit = False
         self._cleanup()
 
@@ -85,17 +88,15 @@ class CeleryDataManager(object):
 
 
 class TransactionalTask(Task):
-    """A task whose execution is delayed until after the current transaction.
-    """
-    abstract = True
+    """A task whose execution is delayed until the current transaction gets committed."""
 
-    def original_apply_async(self, *args, **kwargs):
-        """Shortcut method to reach real implementation of
-        celery.Task.apply_sync"""
-        return super(TransactionalTask, self).apply_async(*args, **kwargs)
+    def retry(self, *args, **kwargs):
+        return super(TransactionalTask, self).retry(*args, bypass_transaction_manager=True, **kwargs)
 
     def apply_async(self, *args, **kwargs):
-        if self.app.conf.get('CELERY_ALWAYS_EAGER', False):
+        bypass_transaction_manager = kwargs.pop('bypass_transaction_manager', None)
+
+        if bypass_transaction_manager:
             return super(TransactionalTask, self).apply_async(*args, **kwargs)
         else:
             _get_manager().append((self, args, kwargs))
