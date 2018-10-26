@@ -15,8 +15,10 @@ __all__ = [
 
 
 # New Celery structure complicates all of this in the name of flexibility
-Task = app_or_default().create_task_cls()
-base_task = app_or_default().task
+celery_app = app_or_default()
+Task = celery_app.create_task_cls()
+base_task = celery_app.task
+
 
 # Thread-local data
 _thread_data = threading.local()
@@ -72,8 +74,9 @@ class CeleryDataManager(object):
 
     def tpc_finish(self, transaction):
         while self.queued_tasks:
-            cls, args, kwargs = self.queued_tasks.pop(0)
-            cls.original_apply_async(*args, **kwargs)
+            task_instance, args, kwargs = self.queued_tasks.pop(0)
+            task_instance.apply_async(*args, call_from_tpc_finish=True, **kwargs)
+
         self.in_commit = False
         self._cleanup()
 
@@ -85,19 +88,15 @@ class CeleryDataManager(object):
 
 
 class TransactionalTask(Task):
-    """A task whose execution is delayed until after the current transaction.
-    """
-    abstract = True
-
-    def original_apply_async(self, *args, **kwargs):
-        """Shortcut method to reach real implementation of
-        celery.Task.apply_sync"""
-        return super(TransactionalTask, self).apply_async(*args, **kwargs)
+    """A task whose execution is delayed until the current transaction gets committed."""
 
     def apply_async(self, *args, **kwargs):
-        if self.app.conf.get('CELERY_ALWAYS_EAGER', False):
-            return super(TransactionalTask, self).apply_async(*args, **kwargs)
-        else:
+        retries_count = kwargs.get('retries', 0)
+        call_from_tpc_finish = kwargs.get('call_from_tpc_finish', None)
+
+        if retries_count == 0 and not(call_from_tpc_finish):
             _get_manager().append((self, args, kwargs))
+        else:
+            return super(TransactionalTask, self).apply_async(*args, **kwargs)
 
 task_tm = partial(base_task, base=TransactionalTask)
